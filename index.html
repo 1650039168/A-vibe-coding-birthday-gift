@@ -1,0 +1,320 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>春日冒险家的生日解谜盒</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css"/>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    
+    <style>
+        body { margin: 0; font-family: "Microsoft YaHei", sans-serif; }
+        #panorama { width: 100vw; height: 100vh; }
+
+        #game-modal {
+            display: none; position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%); background: rgba(255, 255, 255, 0.95); 
+            padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); 
+            text-align: center; z-index: 1000; width: 340px; max-height: 80vh; overflow-y: auto;
+        }
+
+        #game-modal img { max-width: 100%; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        input[type="text"] { padding: 8px; width: 80%; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 16px; letter-spacing: 2px;}
+        .symbol-lock-container { display: flex; justify-content: center; gap: 5px; margin-bottom: 15px; }
+        .symbol-select { font-size: 24px; padding: 5px; border-radius: 5px; border: 2px solid #8B5A2B; background-color: #fdf5e6; cursor: pointer; }
+        button { padding: 8px 20px; margin: 0 5px; border: none; border-radius: 4px; background-color: #8B5A2B; color: white; cursor: pointer; font-size: 14px;}
+        button:hover { background-color: #6B4226; } 
+
+        #letter-overlay {
+            display: none; 
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: #fdf5e6; 
+            z-index: 2000; 
+            opacity: 0; 
+            transition: opacity 2s ease-in-out; 
+            overflow-y: auto;
+            padding: 10vh 20px;
+            box-sizing: border-box;
+        }
+
+        #letter-container {
+            max-width: 600px;
+            margin: 0 auto;
+            color: #4a3b32; 
+            font-family: "Courier New", "幼圆", "KaiTi", serif; 
+            font-size: 18px;
+            line-height: 2.2;
+            text-align: left;
+        }
+
+        .cursor {
+            display: inline-block; width: 2px; background-color: #4a3b32; margin-left: 2px;
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        #final-photo {
+            display: none; max-width: 80%; margin: 40px auto 0; border: 12px solid #fff;
+            border-bottom: 40px solid #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            transform: rotate(-3deg); 
+            opacity: 0; transition: opacity 2s ease-in;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="panorama"></div>
+
+    <div id="game-modal">
+        <img id="modal-img" src="" alt="线索图">
+        <div id="modal-text" style="font-size: 14px; color: #333; line-height: 1.6; margin-bottom: 15px; text-align: left;"></div>
+        
+        <div id="input-text-area">
+            <input type="text" id="answer-input" placeholder="输入答案">
+        </div>
+
+        <div id="input-symbol-area" class="symbol-lock-container" style="display: none;">
+            <select id="sym1" class="symbol-select"><option value="">❓</option><option value="sun">☀️</option><option value="water">💧</option><option value="shovel">⛏️</option><option value="seed">🌱</option></select>
+            <select id="sym2" class="symbol-select"><option value="">❓</option><option value="sun">☀️</option><option value="water">💧</option><option value="shovel">⛏️</option><option value="seed">🌱</option></select>
+            <select id="sym3" class="symbol-select"><option value="">❓</option><option value="sun">☀️</option><option value="water">💧</option><option value="shovel">⛏️</option><option value="seed">🌱</option></select>
+            <select id="sym4" class="symbol-select"><option value="">❓</option><option value="sun">☀️</option><option value="water">💧</option><option value="shovel">⛏️</option><option value="seed">🌱</option></select>
+        </div>
+        
+        <div id="button-area">
+            <button id="btn-confirm" onclick="checkAnswer()">确认开启</button>
+            <button id="btn-close" onclick="closeModal()" style="background-color: #999;">放回原处</button>
+        </div>
+    </div>
+
+    <div id="letter-overlay">
+        <div id="letter-container">
+            <div id="letter-content"></div>
+            <img id="final-photo" src="happy_birthday.png" alt="我们的合照">
+        </div>
+    </div>
+
+<script>
+    let currentPuzzle = "";
+
+    // ========= 新增：初始化时获取网址里的哈希值 =========
+    // 如果刚打开网页没有哈希值，就默认给它加上 #scene1
+    if (!window.location.hash) {
+        window.location.hash = 'scene1';
+    }
+    // 提取当前的关卡名 (去掉前面的 #)
+    let initialScene = window.location.hash.substring(1);
+
+    let myViewer = pannellum.viewer('panorama', {
+        "default": { "firstScene": initialScene, "sceneFadeDuration": 1500 },
+        "scenes": {
+            "scene1": { 
+                "type": "equirectangular", "panorama": "5rustylake.png", "hfov": 140, "minHfov": 50, "maxHfov": 150,
+                "hotSpots": [
+                    {
+                        "pitch": 10, "yaw": 45, "type": "info", "text": "", 
+                        "clickHandlerFunc": function() {
+                            openModal("", "【第1关：锈湖的春日暗号】<br>“解谜的本质就是顺着事物的规律走。<br>那植树节种树的顺序，就是这把锁的密码”<br><i>（请拨动下方的图案锁）</i>", "puzzle1_rustylake", "symbol");
+                        }
+                    }
+                ]
+            },
+            "scene2": {
+                "type": "equirectangular", "panorama": "3detecthome.png", "hfov": 140, "minHfov": 50, "maxHfov": 150,
+                "hotSpots": [
+                    {
+                        "pitch": 0, "yaw": 10, "type": "info", "text": "", 
+                        "clickHandlerFunc": function() {
+                            openModal("liangnvhai.png", "【第2关：望春风】<br>那四个字母，是什么？", "puzzle2_hope", "text");
+                        }
+                    }
+                ]
+            },
+            "scene3": {
+                "type": "equirectangular", "panorama": "2lanadelray.png", "hfov": 140, "minHfov": 50, "maxHfov": 150,
+                "hotSpots": [
+                    {
+                        "pitch": -10, "yaw": 30, "type": "info", "text": "", 
+                        "clickHandlerFunc": function() {
+                        openModal("shangyue.png", "【第3关：赏乐中】<br>打雷歌词为“Cause you want more~ why? You want more ~”是哪首歌？前三个字母是？", "puzzle3_lana", "text");
+                        }
+                    }
+                ]
+            },
+            "scene4": {
+                "type": "equirectangular", "panorama": "4chappell.png", "hfov": 140, "minHfov": 50, "maxHfov": 150,
+                "hotSpots": [
+                    {
+                        "pitch": -5, "yaw": -20, "type": "info", "text": "", 
+                        "clickHandlerFunc": function() {
+                            openModal("", "【第4关：俱乐部】<br>粉色什么？", "puzzle4_pony", "text");
+                        }
+                    }
+                ]
+            },
+            "scene5": {
+                "type": "equirectangular", "panorama": "6wetogether.png", "hfov": 140, "minHfov": 50, "maxHfov": 150,
+                "hotSpots": [
+                    {
+                        "pitch": 0, "yaw": 0, "type": "info", "text": "", 
+                        "clickHandlerFunc": function() {
+                            openModal("", "<b>【spring day】<br>密码<br>", "puzzle_final", "text");
+                        }
+                    }
+                ]
+            }
+        }
+    });
+
+    // ========= 新增：监听浏览器的 前进/后退 按钮 =========
+    window.addEventListener('hashchange', function() {
+        let hashScene = window.location.hash.substring(1); // 提取 # 后面的名字
+        
+        // 如果提取到了有效的场景名字
+        if(hashScene && myViewer.getConfig().scenes[hashScene]) {
+            myViewer.loadScene(hashScene); // 让 3D 引擎切换到对应的画面
+            
+            // 安全机制：用户后退时，强制隐藏信件幕布和任何打开的弹窗
+            document.getElementById('letter-overlay').style.opacity = '0';
+            setTimeout(() => { document.getElementById('letter-overlay').style.display = 'none'; }, 500);
+            closeModal();
+        }
+    });
+
+    function openModal(imgSrc, textHtml, puzzleId, inputType) {
+        document.getElementById('modal-img').src = imgSrc;
+        document.getElementById('modal-img').style.display = imgSrc ? "block" : "none"; 
+        document.getElementById('modal-text').innerHTML = textHtml;
+        currentPuzzle = puzzleId;
+        
+        if (inputType === "text") {
+            document.getElementById('input-text-area').style.display = "block";
+            document.getElementById('input-symbol-area').style.display = "none";
+        } else if (inputType === "symbol") {
+            document.getElementById('input-text-area').style.display = "none";
+            document.getElementById('input-symbol-area').style.display = "flex";
+        }
+        document.getElementById('game-modal').style.display = 'block';
+    }
+
+    function typeWriterHTML(element, html, speed, callback) {
+        let i = 0;
+        let isTag = false;
+        let text = "";
+        element.innerHTML = "";
+        
+        function type() {
+            if (i < html.length) {
+                let char = html.charAt(i);
+                text += char;
+                element.innerHTML = text + '<span class="cursor">|</span>'; 
+                
+                if (char === "<") isTag = true;
+                if (char === ">") isTag = false;
+                
+                i++;
+                if (isTag) {
+                    type(); 
+                } else {
+                    let randomSpeed = speed + (Math.random() * 40 - 20);
+                    setTimeout(type, randomSpeed);
+                }
+            } else {
+                element.innerHTML = text; 
+                if (callback) callback();
+            }
+        }
+        type();
+    }
+
+    function checkAnswer() {
+        let userInput = document.getElementById('answer-input').value.toUpperCase();
+        
+        if (currentPuzzle === "puzzle1_rustylake") {
+            let v1 = document.getElementById('sym1').value;
+            let v2 = document.getElementById('sym2').value;
+            let v3 = document.getElementById('sym3').value;
+            let v4 = document.getElementById('sym4').value;
+            if(v1 === "shovel" && v2 === "seed" && v3 === "water" && v4 === "sun") {
+                alert("【 第 1 个数字：0 】\n（是种子埋进泥土前的数字0，是万物生长的起点。）");
+                closeModal(); 
+                // ========= 修改：将 loadScene 改为改变网址 Hash =========
+                window.location.hash = 'scene2'; 
+            } else {
+                alert("图案顺序不对，万物生长的规律不是这样的...");
+            }
+        }
+        else if (currentPuzzle === "puzzle2_hope") {
+            if(userInput === "HOPE") {
+                alert("【 第 2 个数字：3 】\n（是风叫醒泥土的三月，是带着希望降临的月份...）");
+                closeModal(); 
+                window.location.hash = 'scene3'; 
+            } else {
+                alert("线索似乎不对...当你偶尔被困在名为‘沮丧’的密室时，能打破那扇门、带来全世界最耀眼阳光的终极线索"); document.getElementById('answer-input').value = "";
+            }
+        }
+        else if (currentPuzzle === "puzzle3_lana") {
+            if(userInput === "ART") {
+                alert("【 第 3 个数字：1 】\n（是一颗种子长成大树的笃定，是我们茫茫人海中独一无二的陪伴...）");
+                closeModal(); 
+                window.location.hash = 'scene4'; 
+            } else {
+                alert("密码不对...提示：___ deco"); document.getElementById('answer-input').value = "";
+            }
+        } 
+        else if (currentPuzzle === "puzzle4_pony") {
+            if(userInput === "PONY") {
+                alert("【 第 4 个数字：2 】\n（是两个并肩在春风里狂欢的人，是一直陪着彼此的双倍浪漫...）");
+                closeModal(); 
+                window.location.hash = 'scene5'; 
+            } else {
+                alert("密码不对...玛雅老公，pink ____ club"); document.getElementById('answer-input').value = "";
+            }
+        }
+        
+        else if (currentPuzzle === "puzzle_final") {
+            if(userInput === "0312") {
+                closeModal();
+                
+                let overlay = document.getElementById('letter-overlay');
+                overlay.style.display = 'block';
+                setTimeout(() => { overlay.style.opacity = '1'; }, 100); 
+                
+                let letterText = 
+                    "<b>To Q：</b><br>" +
+                    "生日快乐。<br>" + 
+                    "可能手写信写不了多少内容，我就想试试vibe coding做个网页，不知道效果怎么样，希望你喜欢这份礼物。<br>" + 
+                    "AI说“从2017年的初见，到2021年深夜里的交心，再到今天陪你过的这个生日，我太庆幸能陪你走了这么长的路。”我觉得写得很好，就不改了，因为我真的觉得如此。<br>" +
+                    "和你躺在一起的时候我在想如果我们是真的姐妹会不会很好呢？<br>" +
+                    "现在这样已经很幸福，我记忆中有很多温暖、感动的时刻都是你。<br>" + 
+                    "谢谢你带给我那么多美好。<br>" + 
+                    "属于你的、新的一岁的故事开始了。在此祝你身体健康，万事胜意，天天开心！<br>"+
+                    "我爱你<br>" + 
+                    "Sincerely,<br>" + 
+                    "Rainstar<br>" 
+                    ;
+                
+                setTimeout(() => {
+                    typeWriterHTML(document.getElementById('letter-content'), letterText, 90, function() {
+                        let photo = document.getElementById('final-photo');
+                        photo.style.display = 'block';
+                        setTimeout(() => { photo.style.opacity = '1'; }, 100);
+                    });
+                }, 2000);
+                
+            } else {
+                alert("每次弹出来的数字连起来是...？"); document.getElementById('answer-input').value = "";
+            }
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('game-modal').style.display = 'none';
+        document.getElementById('answer-input').value = "";
+        document.getElementById('sym1').value = "";
+        document.getElementById('sym2').value = "";
+        document.getElementById('sym3').value = "";
+        document.getElementById('sym4').value = "";
+    }
+</script>
+
+</body>
+</html>
